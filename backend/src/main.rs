@@ -1,3 +1,6 @@
+use std::time::Duration;
+
+use rand::prelude::*;
 use dashmap::DashMap;
 use etherparse::{SlicedPacket, VlanSlice};
 use pcap::Device;
@@ -33,7 +36,7 @@ async fn main() {
         .route("/ws/:id", get(ws))
         .layer(cors)
         .with_state(state);
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3003").await.unwrap();
 
     axum::serve(listener, app).await.unwrap();
 }
@@ -86,17 +89,26 @@ async fn scan( card: String, sender: Sender<Data> ){
                     .collect::<Vec<String>>()
                     .join(":");
 
+        if let Some(ref vlan) = packet.vlan {
+            println!("{:?}", vlan);
+        }
+
+        tokio::time::sleep(Duration::from_secs(5)).await;
+
 
         sender.send(Data {
             src: s,
             dst: d,
-            vlan: packet.vlan.map(|v|
-                match v {
-                    VlanSlice::SingleVlan(x) => x.vlan_identifier(),
-                    VlanSlice::DoubleVlan(x) => x.outer().vlan_identifier(),
-                }
-            )}
-        ).await.unwrap();
+            vlan: match random::<bool>() {
+                true => (random::<u8>() as u16).into(),
+                false => None
+            }             // vlan: packet.vlan.map(|v|
+            //     match v {
+            //         VlanSlice::SingleVlan(x) => x.vlan_identifier(),
+            //         VlanSlice::DoubleVlan(x) => x.outer().vlan_identifier(),
+            //     }
+            // )
+        }).await.unwrap();
     }
 }
 

@@ -16,3 +16,4 @@ tokio = { version = "1.34.0", features = ["full"] }
 tower-http = { version = "*", features = ["cors"]}
 dashmap = "5.5.3"
 data-encoding = "2.5.0"
+rand = "0.8.5"
