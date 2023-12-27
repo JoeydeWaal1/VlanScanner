@@ -37,7 +37,6 @@ struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    println!("{:?}", args);
 
     if let Some(interface) = args.interface {
         println!("[SYS] Luisteren naar interface: {} via cmd", interface);
@@ -153,9 +152,6 @@ fn scan_cmd( card: String){
                     .collect::<Vec<String>>()
                     .join(":");
 
-        if let Some(ref vlan) = packet.vlan {
-            println!("{:?}", vlan);
-        }
 
         let vlan = packet.vlan.map(|v|
                 match v {
