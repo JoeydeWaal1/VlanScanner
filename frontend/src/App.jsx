@@ -13,7 +13,7 @@ function App() {
 
   useEffect(() => {
     console.log("fetching devices");
-    axios.get("http://localhost:3003/devices")
+    axios.get("/devices")
     .then((r) => setDevices(r.data))
     .catch((e) => console.log(e));
   }, [])
@@ -22,7 +22,7 @@ function App() {
     if (selected != null){
       console.log(selected.id);
         let url = new URL(`/ws/${selected.id}`, window.location.href)
-        url.port = "3003";
+        // url.port = "3003";
         url.protocol = url.protocol.replace("http","ws");
         console.log(url.href);
 
@@ -62,11 +62,6 @@ function App() {
         <HorizontalGridLines />
         <XAxis title='Vlans'/>
         <YAxis />
-        {/* <DiscreteColorLegend */}
-        {/* // style={{position: 'absolute', left: '50px', top: '10px'}} */}
-        {/* // orientation="horizontal" */}
-          {/* // items={[{ title: "test"}]}  */}
-          {/* // /> */}
         <VerticalBarSeries data={graph_data} />
     </XYPlot>
     <p>Aantal vlans: {vlans.length}</p>

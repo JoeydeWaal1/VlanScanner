@@ -1,5 +1,8 @@
 use std::time::Duration;
+use clap::Parser;
 
+use axum::http::header;
+use axum::response::Html;
 use rand::prelude::*;
 use dashmap::DashMap;
 use etherparse::{SlicedPacket, VlanSlice};
@@ -22,8 +25,26 @@ pub struct AppState {
     pub cards: Vec<IfCard>
 }
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, default_value_t = String::from("8080"))]
+    web: String,
+    #[arg(short, long)]
+    interface: Option<String>
+}
+
 #[tokio::main]
 async fn main() {
+    let args = Args::parse();
+    println!("{:?}", args);
+
+    if let Some(interface) = args.interface {
+        println!("[SYS] Luisteren naar interface: {} via cmd", interface);
+        scan_cmd(interface);
+    }
+
+    println!("[SYS] Starting web interface {}", args.web);
 
     let cors = CorsLayer::new()
     .allow_methods([Method::GET, Method::POST])
@@ -34,9 +55,18 @@ async fn main() {
     let app = Router::new()
         .route("/devices", get(devices))
         .route("/ws/:id", get(ws))
+        .route("/", get(|| async { Html(include_str!("../dist/index.html") )}))
+        .route("/assets/index-FNWSemnn.css", get(|| async {
+            let css = include_str!("../dist/assets/index-FNWSemnn.css");
+            ([(header::CONTENT_TYPE, "text/css")], css)
+        }))
+        .route("/assets/index-bf28pown.js", get(|| async {
+            let js = include_str!("../dist/assets/index-bf28pown.js");
+            ([(header::CONTENT_TYPE, "application/javascript")], js)
+        }))
         .layer(cors)
         .with_state(state);
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3003").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
 
     axum::serve(listener, app).await.unwrap();
 }
@@ -67,8 +97,42 @@ async fn ws_handler( mut socket: WebSocket, s: AppState, id: usize) {
 }
 
 async fn scan( card: String, sender: Sender<Data> ){
-    println!("scanning: {card}");
+    println!("[SYS] scanning: {card}");
 
+    let d = Device::list().unwrap();
+    let device = d.into_iter().find(|d| d.name == card).expect("Device not found");
+
+    let mut cap = Capture::from_device(device).unwrap().immediate_mode(true).promisc(true).open().unwrap();
+    while let Ok(packet) = cap.next_packet() {
+        let packet = SlicedPacket::from_ethernet(packet.data).unwrap();
+
+        let eth = packet.link.unwrap().to_header();
+        let s = eth.source
+                    .iter()
+                    .map(|byte| format!("{:02X}", byte))
+                    .collect::<Vec<String>>()
+                    .join(":");
+
+        let d = eth.destination
+                    .iter()
+                    .map(|byte| format!("{:02X}", byte))
+                    .collect::<Vec<String>>()
+                    .join(":");
+
+        sender.send(Data {
+            src: s,
+            dst: d,
+            vlan: packet.vlan.map(|v|
+                match v {
+                    VlanSlice::SingleVlan(x) => x.vlan_identifier(),
+                    VlanSlice::DoubleVlan(x) => x.outer().vlan_identifier(),
+                }
+            )
+        }).await.unwrap();
+    }
+}
+
+fn scan_cmd( card: String){
     let d = Device::list().unwrap();
     let device = d.into_iter().find(|d| d.name == card).expect("Device not found");
 
@@ -93,22 +157,16 @@ async fn scan( card: String, sender: Sender<Data> ){
             println!("{:?}", vlan);
         }
 
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        let vlan = packet.vlan.map(|v|
+                match v {
+                    VlanSlice::SingleVlan(x) => x.vlan_identifier(),
+                    VlanSlice::DoubleVlan(x) => x.outer().vlan_identifier(),
+                }
+        );
 
-
-        sender.send(Data {
-            src: s,
-            dst: d,
-            vlan: match random::<bool>() {
-                true => (random::<u8>() as u16).into(),
-                false => None
-            }             // vlan: packet.vlan.map(|v|
-            //     match v {
-            //         VlanSlice::SingleVlan(x) => x.vlan_identifier(),
-            //         VlanSlice::DoubleVlan(x) => x.outer().vlan_identifier(),
-            //     }
-            // )
-        }).await.unwrap();
+        if let Some(vlan) = vlan {
+            println!("[SYS] src: {s} -> dst: {d} vlan id: {}", vlan);
+        }
     }
 }
 
