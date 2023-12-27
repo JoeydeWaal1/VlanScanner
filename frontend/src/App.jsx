@@ -64,7 +64,7 @@ function App() {
         <YAxis />
         <VerticalBarSeries data={graph_data} />
     </XYPlot>
-    <p>Aantal vlans: {vlans.length}</p>
+    {/* <p>Aantal vlans: {vlans.length}</p> */}
       <table>
         <tbody className={`grid grid-cols-${Math.ceil(graph_data.length / 10)}`}>
       {
